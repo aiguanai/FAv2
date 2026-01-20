@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFA Demo - Secure Login with Face Recognition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .demo-header {
+            text-align: center;
+            padding: 40px 20px 20px;
+        }
+        
+        .demo-header h1 {
+            font-size: 32px;
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+        
+        .demo-header p {
+            color: #a0a0a0;
+            font-size: 16px;
+        }
+        
+        .demo-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .step-container {
+            display: none;
+        }
+        
+        .step-container.active {
+            display: block;
+        }
+        
+        .demo-info {
+            background: rgba(233, 69, 96, 0.1);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .demo-info h3 {
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+        
+        .demo-info p {
+            color: #a0a0a0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .demo-info code {
+            background: #0f0f1a;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #4ade80;
+        }
+        
+        /* Component container styling */
+        #login-container,
+        #face-container,
+        #otp-container {
+            /* Components render their own styles */
+        }
+        
+        .success-screen {
+            display: none;
+            text-align: center;
+            padding: 60px 30px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px;
+        }
+        
+        .success-screen.active {
+            display: block;
+        }
+        
+        .success-screen .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        
+        .success-screen h2 {
+            color: #4ade80;
+            margin-bottom: 15px;
+        }
+        
+        .success-screen p {
+            color: #a0a0a0;
+            margin-bottom: 30px;
+        }
+        
+        .success-screen .token-display {
+            background: #0f0f1a;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #4ade80;
+            word-break: break-all;
+            text-align: left;
+        }
+        
+        .restart-btn {
+            margin-top: 30px;
+            padding: 12px 30px;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .restart-btn:hover {
+            background: #c73659;
+        }
+    </style>
+    
+    <!-- Load component styles -->
+    <link rel="stylesheet" href="../components/login/login.css">
+    <link rel="stylesheet" href="../components/face-verify/face-verify.css">
+    <link rel="stylesheet" href="../components/otp-verify/otp-verify.css">
+</head>
+<body>
+    <div class="demo-header">
+        <h1>🔐 MFA Secure Login</h1>
+        <p>Multi-factor authentication with facial recognition</p>
+    </div>
+    
+    <div class="demo-container">
+        <div class="demo-info">
+            <h3>Demo Mode</h3>
+            <p>
+                Make sure the backend is running at <code>localhost:8000</code>
+                <br>and you have added a test user via the Admin Tool.
+            </p>
+        </div>
+        
+        <!-- Step 1: Login -->
+        <div id="step-login" class="step-container active">
+            <div id="login-container"></div>
+        </div>
+        
+        <!-- Step 2: Face Verification -->
+        <div id="step-face" class="step-container">
+            <div id="face-container"></div>
+        </div>
+        
+        <!-- Step 3: OTP Verification -->
+        <div id="step-otp" class="step-container">
+            <div id="otp-container"></div>
+        </div>
+        
+        <!-- Success Screen -->
+        <div id="success-screen" class="success-screen">
+            <div class="icon">🎉</div>
+            <h2>Authentication Complete!</h2>
+            <p>You have successfully completed all MFA steps.</p>
+            <div class="token-display" id="token-display">
+                Access Token: Loading...
+            </div>
+            <button class="restart-btn" onclick="location.reload()">
+                Start Over
+            </button>
+        </div>
+    </div>
+    
+    <!-- Load shared API -->
+    <script src="../components/shared/api.js"></script>
+    
+    <!-- Load components -->
+    <script src="../components/login/login.js"></script>
+    <script src="../components/face-verify/face-verify.js"></script>
+    <script src="../components/otp-verify/otp-verify.js"></script>
+    
+    <script>
+        // Configuration
+        const API_URL = 'http://localhost:8000';
+        
+        // State
+        let currentSessionToken = null;
+        let currentPhoneMasked = null;
+        
+        // Helper to switch steps
+        function showStep(stepId) {
+            document.querySelectorAll('.step-container').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById(stepId).classList.add('active');
+        }
+        
+        // Initialize Step 1: Login
+        MFALogin.init({
+            container: '#login-container',
+            apiUrl: API_URL,
+            onSuccess: (result) => {
+                console.log('Step 1 Complete:', result);
+                currentSessionToken = result.sessionToken;
+                
+                // Move to Step 2
+                showStep('step-face');
+                
+                // Initialize face verification
+                MFAFaceVerify.init({
+                    container: '#face-container',
+                    apiUrl: API_URL,
+                    sessionToken: currentSessionToken,
+                    onSuccess: (result) => {
+                        console.log('Step 2 Complete:', result);
+                        currentSessionToken = result.sessionToken;
+                        currentPhoneMasked = result.phoneMasked;
+                        
+                        // Move to Step 3
+                        showStep('step-otp');
+                        
+                        // Initialize OTP verification
+                        MFAOtpVerify.init({
+                            container: '#otp-container',
+                            apiUrl: API_URL,
+                            sessionToken: currentSessionToken,
+                            phoneMasked: currentPhoneMasked,
+                            onSuccess: (result) => {
+                                console.log('Step 3 Complete:', result);
+                                
+                                // Show success screen
+                                document.querySelectorAll('.step-container').forEach(el => {
+                                    el.classList.remove('active');
+                                });
+                                
+                                const successScreen = document.getElementById('success-screen');
+                                successScreen.classList.add('active');
+                                
+                                document.getElementById('token-display').textContent = 
+                                    'Access Token: ' + result.accessToken;
+                            },
+                            onError: (error) => {
+                                console.error('OTP Error:', error);
+                            }
+                        });
+                    },
+                    onError: (error) => {
+                        console.error('Face Error:', error);
+                    }
+                });
+            },
+            onError: (error) => {
+                console.error('Login Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+

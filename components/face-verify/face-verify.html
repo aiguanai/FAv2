@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFA Face Verification</title>
+    <link rel="stylesheet" href="face-verify.css">
+</head>
+<body style="margin: 0; padding: 40px; background: #0a0a0f; min-height: 100vh; box-sizing: border-box;">
+    
+    <!-- Face Verify Component Container -->
+    <div id="face-container"></div>
+    
+    <!-- Load shared API utilities -->
+    <script src="../shared/api.js"></script>
+    
+    <!-- Load face verify component -->
+    <script src="face-verify.js"></script>
+    
+    <!-- Initialize component -->
+    <script>
+        // In a real integration, this token comes from the login step
+        // For testing, you can get a token by calling the login API first
+        const sessionToken = new URLSearchParams(window.location.search).get('token') || 'test-token';
+        
+        MFAFaceVerify.init({
+            container: '#face-container',
+            apiUrl: 'http://localhost:8000',
+            sessionToken: sessionToken,
+            onSuccess: (result) => {
+                console.log('Face verification successful!', result);
+                alert('Face verified! OTP will be sent to: ' + result.phoneMasked);
+                
+                // In a real integration, you would:
+                // 1. Store the new session token
+                // 2. Navigate to or show the OTP verification component
+                
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'MFA_FACE_SUCCESS',
+                        data: result
+                    }, '*');
+                }
+            },
+            onError: (error) => {
+                console.error('Face verification failed:', error);
+            }
+        });
+    </script>
+    
+</body>
+</html>
+

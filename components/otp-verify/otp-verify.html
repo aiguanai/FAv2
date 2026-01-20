@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFA OTP Verification</title>
+    <link rel="stylesheet" href="otp-verify.css">
+</head>
+<body style="margin: 0; padding: 40px; background: #0a0a0f; min-height: 100vh; box-sizing: border-box;">
+    
+    <!-- OTP Verify Component Container -->
+    <div id="otp-container"></div>
+    
+    <!-- Load shared API utilities -->
+    <script src="../shared/api.js"></script>
+    
+    <!-- Load OTP verify component -->
+    <script src="otp-verify.js"></script>
+    
+    <!-- Initialize component -->
+    <script>
+        // In a real integration, these values come from the face verification step
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionToken = urlParams.get('token') || 'test-token';
+        const phoneMasked = urlParams.get('phone') || '+91****543210';
+        
+        MFAOtpVerify.init({
+            container: '#otp-container',
+            apiUrl: 'http://localhost:8000',
+            sessionToken: sessionToken,
+            phoneMasked: phoneMasked,
+            expirySeconds: 300,
+            onSuccess: (result) => {
+                console.log('Authentication complete!', result);
+                alert('Login successful! Access token received.');
+                
+                // In a real integration, you would:
+                // 1. Store the access token
+                // 2. Redirect to the main application
+                
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'MFA_OTP_SUCCESS',
+                        data: result
+                    }, '*');
+                }
+            },
+            onError: (error) => {
+                console.error('OTP verification failed:', error);
+            }
+        });
+    </script>
+    
+</body>
+</html>
+
