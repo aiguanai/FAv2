@@ -1,5 +1,5 @@
 """
-MFA Admin Tool - Tkinter GUI for managing users and Aadhaar-Phone mappings.
+MFA Admin Tool - Tkinter GUI for managing users and Aadhaar-Email mappings.
 """
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -11,21 +11,9 @@ import re
 backend_path = Path(__file__).parent.parent / "backend"
 sys.path.insert(0, str(backend_path))
 
-from PIL import Image, ImageTk
-import io
-
 # MongoDB sync client (Tkinter doesn't play well with async)
 from pymongo import MongoClient
-from passlib.context import CryptContext
-
-# Try to import face_recognition
-try:
-    import face_recognition
-    import numpy as np
-    FACE_RECOGNITION_AVAILABLE = True
-except ImportError:
-    FACE_RECOGNITION_AVAILABLE = False
-    print("WARNING: face_recognition not available. Face encoding will be simulated.")
+import bcrypt
 
 
 class AdminTool:
@@ -34,20 +22,15 @@ class AdminTool:
     def __init__(self, root):
         self.root = root
         self.root.title("MFA Admin Panel")
-        self.root.geometry("600x700")
+        self.root.geometry("600x500")
         self.root.resizable(True, True)
         
-        # Password hashing
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        # Password hashing (using bcrypt directly)
         
         # MongoDB connection
         self.client = None
         self.db = None
         self.connect_to_mongodb()
-        
-        # Selected image path
-        self.selected_image_path = None
-        self.face_encoding = None
         
         # Create UI
         self.create_ui()
@@ -131,39 +114,14 @@ class AdminTool:
         self.phone_var = tk.StringVar()
         ttk.Entry(fields_frame, textvariable=self.phone_var, width=40).grid(row=4, column=1, pady=5, padx=5)
         
-        # Image section
-        image_frame = ttk.LabelFrame(tab, text="Face Photo", padding="10")
-        image_frame.pack(fill=tk.X, pady=20)
-        
-        # Browse button
-        browse_btn = ttk.Button(image_frame, text="Browse Image...", command=self.browse_image)
-        browse_btn.pack(side=tk.LEFT)
-        
-        # Image path label
-        self.image_path_var = tk.StringVar(value="No image selected")
-        ttk.Label(image_frame, textvariable=self.image_path_var).pack(side=tk.LEFT, padx=10)
-        
-        # Image preview frame
-        preview_frame = ttk.Frame(tab)
-        preview_frame.pack(fill=tk.X, pady=10)
-        
-        # Image preview label
-        self.image_preview = ttk.Label(preview_frame, text="Image Preview")
-        self.image_preview.pack()
-        
-        # Face detection status
-        self.face_status_var = tk.StringVar(value="")
-        self.face_status_label = ttk.Label(preview_frame, textvariable=self.face_status_var)
-        self.face_status_label.pack(pady=5)
-        
         # Submit button
         submit_btn = ttk.Button(tab, text="Add User to Database", command=self.add_user)
         submit_btn.pack(pady=20)
     
     def create_add_aadhaar_tab(self):
-        """Create the Add Aadhaar-Phone tab."""
+        """Create the Add Aadhaar-Email tab."""
         tab = ttk.Frame(self.notebook, padding="20")
-        self.notebook.add(tab, text="Add Aadhaar-Phone")
+        self.notebook.add(tab, text="Add Aadhaar-Email")
         
         # Form fields
         fields_frame = ttk.Frame(tab)
@@ -174,36 +132,36 @@ class AdminTool:
         self.aadhaar_link_var = tk.StringVar()
         ttk.Entry(fields_frame, textvariable=self.aadhaar_link_var, width=40).grid(row=0, column=1, pady=10, padx=5)
         
-        # Phone
-        ttk.Label(fields_frame, text="Phone (+91):").grid(row=1, column=0, sticky=tk.W, pady=10)
-        self.phone_link_var = tk.StringVar()
-        ttk.Entry(fields_frame, textvariable=self.phone_link_var, width=40).grid(row=1, column=1, pady=10, padx=5)
+        # Email
+        ttk.Label(fields_frame, text="Email:").grid(row=1, column=0, sticky=tk.W, pady=10)
+        self.email_link_var = tk.StringVar()
+        ttk.Entry(fields_frame, textvariable=self.email_link_var, width=40).grid(row=1, column=1, pady=10, padx=5)
         
         # Info text
         info_text = """
-This simulates the Aadhaar registry where phone numbers are linked to Aadhaar IDs.
+This simulates the Aadhaar registry where email addresses are linked to Aadhaar IDs.
 
-During OTP verification, the system looks up the phone number 
-associated with the user's Aadhaar ID and sends the OTP to that number.
+During OTP verification, the system looks up the email address 
+associated with the user's Aadhaar ID and sends the OTP to that email.
         """
         info_label = ttk.Label(tab, text=info_text, wraplength=500, justify=tk.LEFT)
         info_label.pack(pady=20)
         
         # Submit button
-        submit_btn = ttk.Button(tab, text="Add Aadhaar-Phone Link", command=self.add_aadhaar_phone)
+        submit_btn = ttk.Button(tab, text="Add Aadhaar-Email Link", command=self.add_aadhaar_email)
         submit_btn.pack(pady=20)
         
         # Separator
         ttk.Separator(tab, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=20)
         
         # View existing entries
-        ttk.Label(tab, text="Existing Aadhaar-Phone Links:", font=("Helvetica", 10, "bold")).pack(anchor=tk.W)
+        ttk.Label(tab, text="Existing Aadhaar-Email Links:", font=("Helvetica", 10, "bold")).pack(anchor=tk.W)
         
         # Treeview for existing entries
-        columns = ("aadhaar_id", "phone_no")
+        columns = ("aadhaar_id", "email")
         self.aadhaar_tree = ttk.Treeview(tab, columns=columns, show="headings", height=5)
         self.aadhaar_tree.heading("aadhaar_id", text="Aadhaar ID")
-        self.aadhaar_tree.heading("phone_no", text="Phone Number")
+        self.aadhaar_tree.heading("email", text="Email Address")
         self.aadhaar_tree.pack(fill=tk.X, pady=10)
         
         # Refresh button
@@ -213,88 +171,14 @@ associated with the user's Aadhaar ID and sends the OTP to that number.
         # Initial load
         self.refresh_aadhaar_list()
     
-    def browse_image(self):
-        """Open file dialog to select an image."""
-        filetypes = [
-            ("Image files", "*.jpg *.jpeg *.png *.bmp *.gif"),
-            ("All files", "*.*")
-        ]
-        
-        filepath = filedialog.askopenfilename(
-            title="Select Face Photo",
-            filetypes=filetypes
-        )
-        
-        if filepath:
-            self.selected_image_path = filepath
-            self.image_path_var.set(Path(filepath).name)
-            self.load_and_process_image(filepath)
-    
-    def load_and_process_image(self, filepath):
-        """Load image, show preview, and extract face encoding."""
-        try:
-            # Load and resize for preview
-            image = Image.open(filepath)
-            
-            # Resize for preview (max 200x200)
-            image.thumbnail((200, 200))
-            
-            # Convert to PhotoImage for display
-            photo = ImageTk.PhotoImage(image)
-            self.image_preview.configure(image=photo)
-            self.image_preview.image = photo  # Keep reference
-            
-            # Extract face encoding
-            self.extract_face_encoding(filepath)
-            
-        except Exception as e:
-            messagebox.showerror("Image Error", f"Could not load image:\n{e}")
-    
-    def extract_face_encoding(self, filepath):
-        """Extract face encoding from the image."""
-        self.face_encoding = None
-        
-        if not FACE_RECOGNITION_AVAILABLE:
-            # Simulate face detection
-            self.face_encoding = [0.0] * 128
-            self.face_status_var.set("⚠ Face detection simulated (library not available)")
-            return
-        
-        try:
-            # Load image with face_recognition
-            image = face_recognition.load_image_file(filepath)
-            
-            # Find faces
-            face_locations = face_recognition.face_locations(image)
-            
-            if not face_locations:
-                self.face_status_var.set("❌ No face detected in image")
-                return
-            
-            if len(face_locations) > 1:
-                self.face_status_var.set(f"⚠ Multiple faces detected ({len(face_locations)}). Using first face.")
-            else:
-                self.face_status_var.set("✓ Face detected successfully")
-            
-            # Get encoding
-            encodings = face_recognition.face_encodings(image, face_locations)
-            
-            if encodings:
-                self.face_encoding = encodings[0].tolist()
-            else:
-                self.face_status_var.set("❌ Could not extract face encoding")
-                
-        except Exception as e:
-            self.face_status_var.set(f"❌ Error: {str(e)}")
-    
     def validate_email(self, email):
         """Validate email format."""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
     
     def validate_aadhaar(self, aadhaar):
-        """Validate Aadhaar ID (12 digits)."""
-        return re.match(r'^\d{12}$', aadhaar) is not None
+        """Validate Aadhaar ID (16 digits)."""
+        return re.match(r'^\d{16}$', aadhaar) is not None
     
     def validate_phone(self, phone):
         """Validate phone number (+91 followed by 10 digits)."""
@@ -322,13 +206,10 @@ associated with the user's Aadhaar ID and sends the OTP to that number.
             errors.append("Password must be at least 6 characters")
         
         if not self.validate_aadhaar(aadhaar):
-            errors.append("Aadhaar ID must be 12 digits")
+            errors.append("Aadhaar ID must be 16 digits")
         
         if not self.validate_phone(phone):
             errors.append("Phone must be in format +91XXXXXXXXXX")
-        
-        if self.face_encoding is None:
-            errors.append("Please select an image with a detectable face")
         
         if errors:
             messagebox.showerror("Validation Error", "\n".join(errors))
@@ -344,13 +225,17 @@ associated with the user's Aadhaar ID and sends the OTP to that number.
             return
         
         # Create user document
+        # Hash password using bcrypt directly
+        password_bytes = password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        password_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+        
         user_doc = {
             "email": email,
             "name": name,
-            "password_hash": self.pwd_context.hash(password),
+            "password_hash": password_hash,
             "aadhaar_id": aadhaar,
-            "phone_no": phone,
-            "face_encoding": self.face_encoding
+            "phone_no": phone
         }
         
         try:
@@ -364,28 +249,23 @@ associated with the user's Aadhaar ID and sends the OTP to that number.
             self.password_var.set("")
             self.aadhaar_var.set("")
             self.phone_var.set("")
-            self.image_path_var.set("No image selected")
-            self.face_status_var.set("")
-            self.image_preview.configure(image="")
-            self.selected_image_path = None
-            self.face_encoding = None
             
         except Exception as e:
             messagebox.showerror("Database Error", f"Could not add user:\n{e}")
     
-    def add_aadhaar_phone(self):
-        """Add Aadhaar-Phone link to the database."""
+    def add_aadhaar_email(self):
+        """Add Aadhaar-Email link to the database."""
         aadhaar = self.aadhaar_link_var.get().strip()
-        phone = self.phone_link_var.get().strip()
+        email = self.email_link_var.get().strip()
         
         # Validate
         errors = []
         
         if not self.validate_aadhaar(aadhaar):
-            errors.append("Aadhaar ID must be 12 digits")
+            errors.append("Aadhaar ID must be 16 digits")
         
-        if not self.validate_phone(phone):
-            errors.append("Phone must be in format +91XXXXXXXXXX")
+        if not email or not self.validate_email(email):
+            errors.append("Invalid email address")
         
         if errors:
             messagebox.showerror("Validation Error", "\n".join(errors))
@@ -396,38 +276,38 @@ associated with the user's Aadhaar ID and sends the OTP to that number.
             # Update existing
             result = messagebox.askyesno(
                 "Entry Exists",
-                "An entry for this Aadhaar ID already exists. Update the phone number?"
+                "An entry for this Aadhaar ID already exists. Update the email address?"
             )
             if result:
                 self.db.aadhaar_phone.update_one(
                     {"aadhaar_id": aadhaar},
-                    {"$set": {"phone_no": phone}}
+                    {"$set": {"email": email}}
                 )
-                self.status_var.set("Aadhaar-Phone link updated!")
-                messagebox.showinfo("Success", "Aadhaar-Phone link has been updated.")
+                self.status_var.set("Aadhaar-Email link updated!")
+                messagebox.showinfo("Success", "Aadhaar-Email link has been updated.")
             return
         
         # Create document
         doc = {
             "aadhaar_id": aadhaar,
-            "phone_no": phone
+            "email": email
         }
         
         try:
             self.db.aadhaar_phone.insert_one(doc)
-            self.status_var.set("Aadhaar-Phone link added!")
-            messagebox.showinfo("Success", "Aadhaar-Phone link has been added.")
+            self.status_var.set("Aadhaar-Email link added!")
+            messagebox.showinfo("Success", "Aadhaar-Email link has been added.")
             
             # Clear form and refresh list
             self.aadhaar_link_var.set("")
-            self.phone_link_var.set("")
+            self.email_link_var.set("")
             self.refresh_aadhaar_list()
             
         except Exception as e:
             messagebox.showerror("Database Error", f"Could not add link:\n{e}")
     
     def refresh_aadhaar_list(self):
-        """Refresh the Aadhaar-Phone list."""
+        """Refresh the Aadhaar-Email list."""
         # Clear existing items
         for item in self.aadhaar_tree.get_children():
             self.aadhaar_tree.delete(item)
@@ -436,12 +316,14 @@ associated with the user's Aadhaar ID and sends the OTP to that number.
         try:
             entries = self.db.aadhaar_phone.find()
             for entry in entries:
+                # Handle both old (phone_no) and new (email) formats
+                email_value = entry.get("email") or entry.get("phone_no", "N/A")
                 self.aadhaar_tree.insert("", tk.END, values=(
                     entry["aadhaar_id"],
-                    entry["phone_no"]
+                    email_value
                 ))
         except Exception as e:
-            print(f"Error loading Aadhaar-Phone list: {e}")
+            print(f"Error loading Aadhaar-Email list: {e}")
     
     def on_closing(self):
         """Handle window close."""

@@ -5,11 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import connect_to_mongodb, close_mongodb_connection
-from app.routes import auth, face, otp
+from app.routes import otp
 
 app = FastAPI(
     title="MFA Authentication API",
-    description="Multi-factor authentication with facial recognition",
+    description="Multi-factor authentication with OTP verification",
     version="1.0.0"
 )
 
@@ -36,8 +36,6 @@ async def shutdown_event():
 
 
 # Include routers
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(face.router, prefix="/auth", tags=["Face Recognition"])
 app.include_router(otp.router, prefix="/auth", tags=["OTP Verification"])
 
 
@@ -51,4 +49,11 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return 204 No Content for favicon requests."""
+    from fastapi import Response
+    return Response(status_code=204)
 

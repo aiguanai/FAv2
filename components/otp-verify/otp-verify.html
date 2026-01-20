@@ -9,46 +9,123 @@
 <body style="margin: 0; padding: 40px; background: #0a0a0f; min-height: 100vh; box-sizing: border-box;">
     
     <!-- OTP Verify Component Container -->
-    <div id="otp-container"></div>
+    <div id="otp-container">
+        <div style="color: #a0a0a0; padding: 40px; text-align: center;">
+            <p>Loading OTP component...</p>
+        </div>
+    </div>
     
     <!-- Load shared API utilities -->
-    <script src="../shared/api.js"></script>
+    <script src="../shared/api.js?v=2"></script>
     
     <!-- Load OTP verify component -->
-    <script src="otp-verify.js"></script>
+    <script src="otp-verify.js?v=2"></script>
     
     <!-- Initialize component -->
     <script>
-        // In a real integration, these values come from the face verification step
-        const urlParams = new URLSearchParams(window.location.search);
-        const sessionToken = urlParams.get('token') || 'test-token';
-        const phoneMasked = urlParams.get('phone') || '+91****543210';
-        
-        MFAOtpVerify.init({
-            container: '#otp-container',
-            apiUrl: 'http://localhost:8000',
-            sessionToken: sessionToken,
-            phoneMasked: phoneMasked,
-            expirySeconds: 300,
-            onSuccess: (result) => {
-                console.log('Authentication complete!', result);
-                alert('Login successful! Access token received.');
-                
-                // In a real integration, you would:
-                // 1. Store the access token
-                // 2. Redirect to the main application
-                
-                if (window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'MFA_OTP_SUCCESS',
-                        data: result
-                    }, '*');
-                }
-            },
-            onError: (error) => {
-                console.error('OTP verification failed:', error);
+        // Error handling wrapper
+        try {
+            console.log('OTP Component: Starting initialization...');
+            
+            // Check if scripts loaded
+            if (typeof MFAApi === 'undefined') {
+                throw new Error('MFAApi not loaded. Check if api.js is accessible.');
             }
-        });
+            
+            if (typeof MFAOtpVerify === 'undefined') {
+                throw new Error('MFAOtpVerify not loaded. Check if otp-verify.js is accessible.');
+            }
+            
+            console.log('OTP Component: Scripts loaded successfully');
+            
+            // Get parameters from URL or POST data
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email');
+            const sessionToken = urlParams.get('token');
+            const phoneMasked = urlParams.get('phone') || urlParams.get('email') || 'u***@example.com';
+            
+            console.log('OTP Component: URL params - email:', email, 'token:', sessionToken ? 'present' : 'missing');
+            
+            // Configuration
+            const initConfig = {
+                container: '#otp-container',
+                apiUrl: 'http://localhost:8000',
+                phoneMasked: phoneMasked,
+                expirySeconds: 300,
+                onSuccess: (result) => {
+                    console.log('Authentication complete!', result);
+                    alert('Login successful! Access token received.');
+                    
+                    // In a real integration, you would:
+                    // 1. Store the access token
+                    // 2. Redirect to the main application
+                    
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'MFA_OTP_SUCCESS',
+                            data: result
+                        }, '*');
+                    }
+                },
+                onError: (error) => {
+                    console.error('OTP verification failed:', error);
+                    // Show error on page
+                    const container = document.getElementById('otp-container');
+                    if (container) {
+                        container.innerHTML = 
+                            '<div style="color: #ff6b6b; padding: 20px; text-align: center; background: rgba(233, 69, 96, 0.1); border-radius: 10px;">' +
+                            '<h3>Error</h3>' +
+                            '<p>' + (error.message || 'OTP verification failed') + '</p>' +
+                            '</div>';
+                    }
+                }
+            };
+            
+            // Use email if provided (for friend's login component integration)
+            // Otherwise use sessionToken
+            if (email) {
+                initConfig.email = email;
+                console.log('Initializing OTP with email:', email);
+            } else if (sessionToken) {
+                initConfig.sessionToken = sessionToken;
+                console.log('Initializing OTP with session token');
+            } else {
+                console.error('No email or session token provided. Use ?email=user@example.com in URL');
+                document.getElementById('otp-container').innerHTML = 
+                    '<div style="color: #ff6b6b; padding: 20px; text-align: center; background: rgba(233, 69, 96, 0.1); border-radius: 10px;">' +
+                    '<h3>Error</h3>' +
+                    '<p>No email or token provided.</p>' +
+                    '<p>Use <code>?email=user@example.com</code> in URL</p>' +
+                    '<p style="margin-top: 20px; font-size: 12px; color: #a0a0a0;">Example: otp-verify.html?email=test@example.com</p>' +
+                    '</div>';
+                // Don't initialize if no email/token
+            }
+            
+            // Initialize component only if we have email or token
+            if (email || sessionToken) {
+                console.log('OTP Component: Calling MFAOtpVerify.init...');
+                MFAOtpVerify.init(initConfig);
+                console.log('OTP Component: Initialization call completed');
+            }
+            
+        } catch (error) {
+            console.error('OTP Component: Fatal error during initialization:', error);
+            const container = document.getElementById('otp-container');
+            if (container) {
+                container.innerHTML = 
+                    '<div style="color: #ff6b6b; padding: 20px; text-align: center; background: rgba(233, 69, 96, 0.1); border-radius: 10px;">' +
+                    '<h3>Fatal Error</h3>' +
+                    '<p>' + error.message + '</p>' +
+                    '<p style="margin-top: 10px; font-size: 12px; color: #a0a0a0;">Check browser console for details</p>' +
+                    '</div>';
+            } else {
+                document.body.innerHTML = 
+                    '<div style="color: #ff6b6b; padding: 40px; text-align: center;">' +
+                    '<h1>Error</h1>' +
+                    '<p>' + error.message + '</p>' +
+                    '</div>';
+            }
+        }
     </script>
     
 </body>

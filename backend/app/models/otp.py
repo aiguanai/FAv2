@@ -24,11 +24,18 @@ class OTPRequest(BaseModel):
     session_token: str
 
 
+class OTPInitByEmail(BaseModel):
+    """Initialize OTP by email - looks up Aadhaar and phone automatically."""
+    email: str = Field(..., description="User's email address")
+
+
 class OTPSendResponse(BaseModel):
     """Response after OTP is sent."""
     success: bool
     message: str
     expires_in: int = Field(..., description="Seconds until OTP expires")
+    phone_masked: str = Field(..., description="Masked email/phone for display (email_masked for email OTP)")
+    session_token: Optional[str] = Field(None, description="Session token for OTP verification (only for init-otp-by-email)")
 
 
 class OTPVerify(BaseModel):
@@ -45,11 +52,11 @@ class OTPVerifyResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class AadhaarPhone(BaseModel):
-    """Aadhaar-Phone mapping model."""
+class AadhaarEmail(BaseModel):
+    """Aadhaar-Email mapping model."""
     id: Optional[str] = Field(None, alias="_id")
-    aadhaar_id: str = Field(..., pattern=r"^\d{12}$")
-    phone_no: str = Field(..., pattern=r"^\+91\d{10}$")
+    aadhaar_id: str = Field(..., pattern=r"^\d{16}$")
+    email: str = Field(..., description="Email address linked to Aadhaar")
     
     class Config:
         populate_by_name = True

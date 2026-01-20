@@ -1,6 +1,6 @@
 /**
  * MFA OTP Verification Component
- * Step 3: OTP verification via Aadhaar-linked phone
+ * OTP verification via email
  */
 
 const MFAOtpVerify = (function() {
@@ -8,6 +8,7 @@ const MFAOtpVerify = (function() {
         container: null,
         apiUrl: 'http://localhost:8000',
         sessionToken: null,
+        email: null,  // Alternative: can initialize with email instead of sessionToken
         phoneMasked: '****',
         expirySeconds: 300,
         onSuccess: null,
@@ -24,8 +25,12 @@ const MFAOtpVerify = (function() {
     function init(options) {
         config = { ...config, ...options };
         
-        if (!config.sessionToken) {
-            console.error('MFAOtpVerify: Session token is required');
+        console.log('MFAOtpVerify.init: config.sessionToken:', config.sessionToken ? 'present' : 'missing');
+        console.log('MFAOtpVerify.init: config.email:', config.email ? config.email : 'missing');
+        
+        // Either sessionToken or email must be provided
+        if (!config.sessionToken && !config.email) {
+            console.error('MFAOtpVerify: Either sessionToken or email is required');
             return;
         }
         
@@ -50,8 +55,12 @@ const MFAOtpVerify = (function() {
         // Attach events
         attachEvents(container);
         
-        // Send OTP automatically
-        sendOtp(container);
+        // Initialize OTP - use email if provided, otherwise use sessionToken
+        if (config.email) {
+            initOtpByEmail(container);
+        } else {
+            sendOtp(container);
+        }
     }
     
     /**
@@ -68,7 +77,7 @@ const MFAOtpVerify = (function() {
                 
                 <div class="mfa-otp-header">
                     <h2>OTP Verification</h2>
-                    <p>Step 3: Enter the code sent to your phone</p>
+                    <p>Enter the code sent to your email</p>
                 </div>
                 
                 <div class="mfa-error-message" id="mfa-otp-error"></div>
@@ -81,7 +90,7 @@ const MFAOtpVerify = (function() {
                 
                 <div id="mfa-otp-form-container">
                     <div class="mfa-phone-display">
-                        <div class="icon">📱</div>
+                        <div class="icon">📧</div>
                         <div class="label">OTP sent to</div>
                         <div class="number" id="mfa-phone-number">${config.phoneMasked}</div>
                     </div>
@@ -187,7 +196,11 @@ const MFAOtpVerify = (function() {
         
         // Resend button
         resendBtn.addEventListener('click', async () => {
-            await sendOtp(container);
+            if (config.email) {
+                await initOtpByEmail(container);
+            } else {
+                await sendOtp(container);
+            }
         });
     }
     
@@ -203,7 +216,84 @@ const MFAOtpVerify = (function() {
     }
     
     /**
-     * Send OTP to user's phone
+     * Initialize OTP by email (looks up Aadhaar and phone automatically)
+     */
+    async function initOtpByEmail(container) {
+        const errorDiv = container.querySelector('#mfa-otp-error');
+        const resendBtn = container.querySelector('#mfa-resend-btn');
+        
+        console.log('initOtpByEmail: Starting with email:', config.email);
+        
+        hideError(errorDiv);
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Sending...';
+        
+        try {
+            if (!config.email) {
+                throw new Error('Email is required to initialize OTP');
+            }
+            
+            let response;
+            
+            if (typeof MFAApi !== 'undefined' && MFAApi.initOtpByEmail) {
+                console.log('initOtpByEmail: Using MFAApi.initOtpByEmail');
+                try {
+                    response = await MFAApi.initOtpByEmail(config.email);
+                    console.log('initOtpByEmail: Response received:', response);
+                } catch (apiError) {
+                    console.error('initOtpByEmail: API Error:', apiError);
+                    throw apiError;
+                }
+            } else {
+                console.log('initOtpByEmail: Using direct fetch to:', `${config.apiUrl}/auth/init-otp-by-email`);
+                const res = await fetch(`${config.apiUrl}/auth/init-otp-by-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: config.email })
+                });
+                
+                console.log('initOtpByEmail: Fetch response status:', res.status);
+                response = await res.json();
+                console.log('initOtpByEmail: Response received:', response);
+                
+                if (!res.ok) {
+                    throw new Error(response.detail || 'Failed to initialize OTP');
+                }
+            }
+            
+            // Store session token from response
+            if (response.session_token) {
+                config.sessionToken = response.session_token;
+                console.log('initOtpByEmail: Session token stored');
+            } else {
+                console.warn('initOtpByEmail: No session_token in response');
+            }
+            
+            // Update phone number display
+            if (response.phone_masked) {
+                const phoneDisplay = container.querySelector('#mfa-phone-number');
+                if (phoneDisplay) {
+                    phoneDisplay.textContent = response.phone_masked;
+                }
+            }
+            
+            // Start timer
+            startTimer(container, response.expires_in || config.expirySeconds);
+            
+            resendBtn.textContent = 'Resend OTP';
+            
+        } catch (error) {
+            console.error('initOtpByEmail: Error caught:', error);
+            console.error('initOtpByEmail: Error message:', error.message);
+            console.error('initOtpByEmail: Error stack:', error.stack);
+            showError(errorDiv, error.message || 'Failed to send OTP. Please try again.');
+            resendBtn.textContent = 'Retry Send';
+            resendBtn.disabled = false;
+        }
+    }
+    
+    /**
+     * Send OTP to user's phone (using existing session token)
      */
     async function sendOtp(container) {
         const errorDiv = container.querySelector('#mfa-otp-error');
@@ -229,6 +319,14 @@ const MFAOtpVerify = (function() {
                 
                 if (!res.ok) {
                     throw new Error(response.detail || 'Failed to send OTP');
+                }
+            }
+            
+            // Update phone number display if provided
+            if (response.phone_masked) {
+                const phoneDisplay = container.querySelector('#mfa-phone-number');
+                if (phoneDisplay) {
+                    phoneDisplay.textContent = response.phone_masked;
                 }
             }
             
@@ -306,6 +404,11 @@ const MFAOtpVerify = (function() {
         hideError(errorDiv);
         
         try {
+            // Ensure we have a session token
+            if (!config.sessionToken) {
+                throw new Error('Session token is missing. Please try again.');
+            }
+            
             let response;
             
             if (typeof MFAApi !== 'undefined') {

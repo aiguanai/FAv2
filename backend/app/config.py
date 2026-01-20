@@ -22,17 +22,17 @@ class Settings:
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRY_MINUTES: int = int(os.getenv("JWT_EXPIRY_MINUTES", "30"))
     
-    # MSG91
-    MSG91_AUTH_KEY: str = os.getenv("MSG91_AUTH_KEY", "")
-    MSG91_TEMPLATE_ID: str = os.getenv("MSG91_TEMPLATE_ID", "")
-    MSG91_SENDER_ID: str = os.getenv("MSG91_SENDER_ID", "MFAAPP")
+    # Email SMTP Configuration (for Email OTP)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "")
+    FROM_NAME: str = os.getenv("FROM_NAME", "MFA Authentication")
     
     # OTP
     OTP_EXPIRY_SECONDS: int = int(os.getenv("OTP_EXPIRY_SECONDS", "300"))
     OTP_LENGTH: int = int(os.getenv("OTP_LENGTH", "6"))
-    
-    # Face Recognition
-    FACE_MATCH_TOLERANCE: float = float(os.getenv("FACE_MATCH_TOLERANCE", "0.6"))
 
 
 settings = Settings()

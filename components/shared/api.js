@@ -44,16 +44,30 @@ const MFAApi = (function() {
         }
         
         try {
+            console.log(`[MFAApi] Making ${method} request to: ${url}`);
+            if (data) {
+                console.log(`[MFAApi] Request data:`, data);
+            }
+            
             const response = await fetch(url, options);
+            console.log(`[MFAApi] Response status: ${response.status}`);
+            
             const responseData = await response.json();
+            console.log(`[MFAApi] Response data:`, responseData);
             
             if (!response.ok) {
-                throw new Error(responseData.detail || 'Request failed');
+                const errorMsg = responseData.detail || 'Request failed';
+                console.error(`[MFAApi] Error: ${errorMsg}`);
+                throw new Error(errorMsg);
             }
             
             return responseData;
         } catch (error) {
-            console.error('API Error:', error);
+            console.error('[MFAApi] Request failed:', error);
+            console.error('[MFAApi] Error details:', {
+                message: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -69,21 +83,19 @@ const MFAApi = (function() {
     }
     
     /**
-     * Step 2: Verify face
-     * @param {string} sessionToken - Token from login step
-     * @param {string} faceImageBase64 - Base64 encoded face image
-     * @returns {Promise<object>} - Face verification response
+     * Initialize OTP by email (looks up Aadhaar and phone automatically)
+     * @param {string} email - User's email address
+     * @returns {Promise<object>} - OTP send response with session token
      */
-    async function verifyFace(sessionToken, faceImageBase64) {
-        return request('/auth/verify-face', 'POST', {
-            session_token: sessionToken,
-            face_image: faceImageBase64
+    async function initOtpByEmail(email) {
+        return request('/auth/init-otp-by-email', 'POST', {
+            email: email
         });
     }
     
     /**
-     * Step 3a: Send OTP
-     * @param {string} sessionToken - Token from face verification step
+     * Step 2a: Send OTP
+     * @param {string} sessionToken - Token from login step
      * @returns {Promise<object>} - OTP send response
      */
     async function sendOtp(sessionToken) {
@@ -93,8 +105,8 @@ const MFAApi = (function() {
     }
     
     /**
-     * Step 3b: Verify OTP
-     * @param {string} sessionToken - Token from face verification step
+     * Step 2b: Verify OTP
+     * @param {string} sessionToken - Token from login step
      * @param {string} otp - 6-digit OTP
      * @returns {Promise<object>} - Final verification response with access token
      */
@@ -110,7 +122,7 @@ const MFAApi = (function() {
         configure,
         request,
         login,
-        verifyFace,
+        initOtpByEmail,
         sendOtp,
         verifyOtp
     };

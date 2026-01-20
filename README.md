@@ -1,212 +1,191 @@
-# MFA Secure Login System with Facial Recognition
+# Email OTP Verification Component
 
-A multi-factor authentication system featuring email/password login, facial recognition verification, and Aadhaar-linked phone OTP verification.
+A standalone Email OTP verification component with FastAPI backend and MongoDB database. Designed for integration into existing authentication systems.
 
 ## Features
 
-- **3-Factor Authentication**
-  1. Email + Password verification
-  2. Face recognition using webcam
-  3. OTP verification via Aadhaar-linked phone number
-
-- **Standalone Components**: Each authentication step is a self-contained HTML/CSS/JS component that can be embedded anywhere
-
-- **Admin Tool**: Tkinter GUI for managing users and Aadhaar-phone mappings
-
-- **Modern Stack**: FastAPI backend, MongoDB database, MSG91 OTP integration
+- **Email OTP Verification** - Send and verify OTP codes via email
+- **Standalone Component** - Self-contained HTML/CSS/JS component
+- **Admin Tool** - Tkinter GUI for database initialization
+- **FastAPI Backend** - RESTful API for OTP management
+- **MongoDB Database** - User and OTP session storage
 
 ## Project Structure
 
 ```
 FAp2/
-├── backend/                    # FastAPI backend
+├── backend/                 # FastAPI backend server
 │   ├── app/
-│   │   ├── main.py            # Application entry point
-│   │   ├── config.py          # Environment configuration
-│   │   ├── database.py        # MongoDB connection
-│   │   ├── models/            # Pydantic models
-│   │   ├── routes/            # API endpoints
-│   │   └── services/          # Business logic
+│   │   ├── main.py         # FastAPI app entry point
+│   │   ├── config.py       # Configuration (SMTP, MongoDB, etc.)
+│   │   ├── database.py     # MongoDB connection
+│   │   ├── models/         # Pydantic models
+│   │   ├── routes/
+│   │   │   └── otp.py      # OTP API endpoints
+│   │   ├── services/
+│   │   │   └── email_service.py  # Email sending service
+│   │   └── utils/
+│   │       └── security.py # JWT, OTP generation
 │   ├── requirements.txt
-│   └── env.example.txt        # Environment template
+│   └── env.example.txt
+│
 ├── admin/
-│   └── admin_tool.py          # Tkinter admin GUI
-├── components/                 # Standalone frontend components
-│   ├── login/                 # Email/password login
-│   ├── face-verify/           # Webcam face verification
-│   ├── otp-verify/            # OTP input & verification
+│   └── admin_tool.py       # Tkinter GUI for database management
+│
+├── components/
+│   ├── otp-verify/          # Email OTP component
+│   │   ├── otp-verify.html
+│   │   ├── otp-verify.css
+│   │   └── otp-verify.js
 │   └── shared/
-│       └── api.js             # Shared API utilities
-└── demo/
-    └── index.html             # Demo page with all components
+│       └── api.js           # API utility functions
+│
+└── INTEGRATION_TROUBLESHOOTING.md  # Complete integration guide
 ```
 
-## Setup Instructions
+## Quick Start
 
-### Prerequisites
-
-- Python 3.9+
-- MongoDB (running locally or connection string)
-- Node.js (optional, for serving frontend)
-
-### 1. Backend Setup
+### 1. Setup Backend
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
 
 # Activate (Windows)
 venv\Scripts\activate
 
-# Activate (macOS/Linux)
+# Activate (Linux/Mac)
 source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Create .env file
+cp env.example.txt .env
+# Edit .env with your MongoDB and SMTP settings
 ```
 
-**Note for face_recognition on Windows:**
-You may need to install Visual Studio Build Tools and CMake first:
-1. Install Visual Studio Build Tools with C++ workload
-2. Install CMake: `pip install cmake`
-3. Then: `pip install face_recognition`
+### 2. Initialize Database
 
-On macOS, it's simpler:
-```bash
-brew install cmake
-pip install face_recognition
-```
-
-### 2. Environment Configuration
-
-Copy `env.example.txt` to `.env` and configure:
-
-```bash
-# MongoDB
-MONGODB_URL=mongodb://localhost:27017
-DATABASE_NAME=mfa_auth_db
-
-# JWT (change in production!)
-JWT_SECRET_KEY=your-super-secret-key
-
-# MSG91 (get from msg91.com dashboard)
-MSG91_AUTH_KEY=your-auth-key
-MSG91_TEMPLATE_ID=your-template-id
-
-# Face matching tolerance (0.6 is default, lower = stricter)
-FACE_MATCH_TOLERANCE=0.6
-```
-
-### 3. Start the Backend
-
-```bash
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-API docs available at: http://localhost:8000/docs
-
-### 4. Add Test Users via Admin Tool
-
+Use the Admin Tool:
 ```bash
 cd admin
 python admin_tool.py
 ```
 
-1. Go to "Add Aadhaar-Phone" tab
-2. Add an Aadhaar ID and linked phone number
-3. Go to "Add User" tab
-4. Fill in user details and browse for a face photo
-5. Click "Add User to Database"
+1. **Add User** tab: Create users with email, name, password, Aadhaar ID
+2. **Add Aadhaar-Email** tab: Link Aadhaar IDs to email addresses (where OTP will be sent)
 
-### 5. Test the Demo
-
-Open `demo/index.html` in a browser (use a local server for webcam access):
+### 3. Start Backend Server
 
 ```bash
-# Using Python
-cd demo
-python -m http.server 3000
-
-# Or using Node
-npx serve demo -p 3000
+cd backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Visit: http://localhost:3000
+### 4. Test Component
 
-## API Endpoints
+Open in browser:
+```
+http://localhost:3000/components/otp-verify/otp-verify.html?email=user@example.com
+```
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/auth/login` | POST | Step 1: Verify email/password |
-| `/auth/verify-face` | POST | Step 2: Verify face encoding |
-| `/auth/send-otp` | POST | Send OTP to Aadhaar-linked phone |
-| `/auth/verify-otp` | POST | Step 3: Verify OTP, get access token |
+## Integration
 
-## Component Usage
+See **[INTEGRATION_TROUBLESHOOTING.md](INTEGRATION_TROUBLESHOOTING.md)** for complete integration guide, API documentation, and troubleshooting.
 
-Each component can be used standalone:
+### Quick Integration Example
 
 ```html
-<!-- Include component files -->
-<link rel="stylesheet" href="components/login/login.css">
-<script src="components/shared/api.js"></script>
-<script src="components/login/login.js"></script>
+<!-- Option 1: Direct URL -->
+<iframe src="http://your-domain/components/otp-verify/otp-verify.html?email=user@example.com"></iframe>
 
-<!-- Initialize -->
-<div id="my-container"></div>
+<!-- Option 2: Embedded Component -->
+<div id="otp-container"></div>
+<script src="components/shared/api.js"></script>
+<script src="components/otp-verify/otp-verify.js"></script>
 <script>
-MFALogin.init({
-    container: '#my-container',
+MFAOtpVerify.init({
+    container: '#otp-container',
     apiUrl: 'http://localhost:8000',
+    email: 'user@example.com',
     onSuccess: (result) => {
-        console.log('Token:', result.sessionToken);
-        // Proceed to next step
-    },
-    onError: (error) => {
-        console.error(error);
+        console.log('Access token:', result.accessToken);
     }
 });
 </script>
 ```
 
+## API Endpoints
+
+- `POST /auth/init-otp-by-email` - Initialize OTP verification
+- `POST /auth/send-otp` - Resend OTP (requires session token)
+- `POST /auth/verify-otp` - Verify OTP code
+
+See [INTEGRATION_TROUBLESHOOTING.md](INTEGRATION_TROUBLESHOOTING.md) for detailed API documentation.
+
+## Configuration
+
+### Environment Variables (`.env`)
+
+```env
+# MongoDB
+MONGODB_URL=mongodb://localhost:27017
+DATABASE_NAME=mfa_auth_db
+
+# JWT
+JWT_SECRET_KEY=your-secret-key
+JWT_EXPIRY_MINUTES=30
+
+# Email SMTP (leave empty for dev mode)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+FROM_EMAIL=your-email@gmail.com
+FROM_NAME=MFA Authentication
+
+# OTP Settings
+OTP_EXPIRY_SECONDS=300
+OTP_LENGTH=6
+```
+
+**Dev Mode:** If `SMTP_USER` is empty, OTP codes will be printed to the backend console.
+
 ## Database Schema
 
 ### Users Collection
-- email (unique)
-- name
-- password_hash
-- face_encoding (128 floats)
-- aadhaar_id (unique)
-- phone_no
+- `email` (unique)
+- `name`
+- `password_hash`
+- `aadhaar_id` (unique, 16 digits)
+- `phone_no` (optional)
 
-### AadhaarPhone Collection
-- aadhaar_id (unique)
-- phone_no
+### Aadhaar-Email Collection (`aadhaar_phone`)
+- `aadhaar_id` (unique, 16 digits)
+- `email` (email address where OTP is sent)
 
-### OTPSessions Collection
-- user_id
-- otp_hash
-- expires_at (TTL index)
+### OTP Sessions Collection
+- `user_id`
+- `otp_hash`
+- `expires_at` (TTL index, auto-expires)
 
-## Development Notes
+## Troubleshooting
 
-- **Cross-platform**: Developed on Windows, deployable on macOS
-- **Face encoding**: 128-dimensional vector stored as array
-- **OTP**: Hashed before storage, auto-expires via MongoDB TTL
-- **Dev mode**: If MSG91 not configured, OTPs print to console
+For detailed troubleshooting, see **[INTEGRATION_TROUBLESHOOTING.md](INTEGRATION_TROUBLESHOOTING.md)**.
 
-## Security Considerations
+Common issues:
+- **CORS Error** → Backend not running or not accessible
+- **User not found** → Add user via Admin Tool
+- **OTP not received** → Check SMTP settings or use dev mode
+- **MongoDB connection error** → Ensure MongoDB is running
 
-- Passwords hashed with bcrypt
-- OTPs hashed before storage
-- Session tokens are short-lived (10 min)
-- Access tokens configurable expiry
-- Face match tolerance configurable
+## Requirements
+
+- Python 3.9+
+- MongoDB (local or remote)
+- SMTP server (Gmail, Outlook, or custom) - Optional for dev mode
 
 ## License
 
 MIT
-
